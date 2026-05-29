@@ -74,13 +74,18 @@ jobs:
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then
             echo ""
-            echo "==================== BUILD FAILED: extracted errors ===================="
-            grep -nE "error: |error generated|fatal error|The following build commands failed|Command .* failed|ld: |Undefined symbol|No such (file|module)|Multiple commands produce" xcodebuild.log \
+            echo "==================== BUILD FAILED ===================="
+            echo "----- Swift Package Manager resolution -----"
+            grep -n -A 25 "Could not resolve package dependencies" xcodebuild.log | head -n 60 || true
+            echo "----- PhaseScript / xcframework script output -----"
+            grep -n -B 3 -A 25 "PhaseScriptExecution failed" xcodebuild.log | head -n 120 || true
+            echo "----- compile / link errors -----"
+            grep -nE "error: |error generated|fatal error|Undefined symbol|ld: |No such (file|module)|Multiple commands produce" xcodebuild.log \
               | grep -viE "note: |Disabling previews|will be run during every build" \
-              | tail -n 100
-            echo "========================================================================"
-            echo "If nothing appears above, the last 60 raw lines were:"
-            tail -n 60 xcodebuild.log
+              | tail -n 60 || true
+            echo "----- last 80 raw lines -----"
+            tail -n 80 xcodebuild.log
+            echo "====================================================="
           fi
           exit "$status"
 
