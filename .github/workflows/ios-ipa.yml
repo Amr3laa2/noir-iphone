@@ -70,6 +70,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
             build 2>&1 | tee xcodebuild.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then

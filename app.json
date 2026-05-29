@@ -72,12 +72,6 @@
         "projectId": "6749cbd7-1794-46c1-ba43-838782b3284d"
       }
     },
-    "owner": "amr3laa2",
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/6749cbd7-1794-46c1-ba43-838782b3284d"
-    }
+    "owner": "amr3laa2"
   }
 }
