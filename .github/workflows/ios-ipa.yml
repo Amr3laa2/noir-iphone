@@ -1,0 +1,85 @@
+name: Build unsigned iOS IPA
+
+# Produces an UNSIGNED .ipa on a cloud macOS runner. You then sign it on your
+# own machine with Sideloadly + a free Apple ID (no paid Apple Developer account
+# and no Mac of your own required). See BUILD.md.
+
+on:
+  workflow_dispatch: {} # manual "Run workflow" button
+  push:
+    tags:
+      - 'v*' # tagging a release (e.g. v1.0.0) also builds
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '16.2'
+
+      - name: Install JS dependencies
+        run: npm ci
+
+      - name: Generate native iOS project (expo prebuild)
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: '1'
+
+      - name: Install CocoaPods
+        working-directory: ios
+        run: pod install --repo-update
+
+      - name: Build unsigned app (Release, no code signing)
+        working-directory: ios
+        run: |
+          set -eo pipefail
+          WORKSPACE="$(ls -d *.xcworkspace | head -n1)"
+          SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | jq -r '.workspace.schemes[] | select(test("Pods") | not)' | head -n1)"
+          echo "Workspace: $WORKSPACE  Scheme: $SCHEME"
+          xcodebuild \
+            -workspace "$WORKSPACE" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath "$PWD/build" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned IPA
+        working-directory: ios
+        run: |
+          set -eo pipefail
+          APP_PATH="$(ls -d build/Build/Products/Release-iphoneos/*.app | head -n1)"
+          echo "Packaging: $APP_PATH"
+          rm -rf Payload noir-mobile-unsigned.ipa
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          # An .ipa is just a zip with a Payload/ directory.
+          zip -qry noir-mobile-unsigned.ipa Payload
+          ls -lh noir-mobile-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: noir-mobile-unsigned-ipa
+          path: ios/build/noir-mobile-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 30
