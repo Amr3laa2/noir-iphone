@@ -50,13 +50,21 @@ jobs:
         run: |
           set -o pipefail
           WORKSPACE="$(ls -d *.xcworkspace | head -n1)"
-          SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | jq -r '.workspace.schemes[] | select(test("Pods") | not)' | head -n1)"
+          BASENAME="${WORKSPACE%.xcworkspace}"
+          # Prefer the scheme that matches the workspace name (the real app),
+          # not helper schemes like "EASClient". Fall back to first non-Pods scheme.
+          SCHEMES_JSON="$(xcodebuild -list -json -workspace "$WORKSPACE")"
+          SCHEME="$(echo "$SCHEMES_JSON" | jq -r --arg n "$BASENAME" '.workspace.schemes[] | select(. == $n)' | head -n1)"
+          if [ -z "$SCHEME" ]; then
+            SCHEME="$(echo "$SCHEMES_JSON" | jq -r '.workspace.schemes[] | select((test("Pods")|not) and (. != "EASClient"))' | head -n1)"
+          fi
           echo "Workspace: $WORKSPACE  Scheme: $SCHEME"
           set +e
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
             -configuration Release \
+            -destination 'generic/platform=iOS' \
             -sdk iphoneos \
             -derivedDataPath "$PWD/build" \
             CODE_SIGNING_ALLOWED=NO \
