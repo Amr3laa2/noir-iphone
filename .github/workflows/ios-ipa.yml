@@ -48,10 +48,11 @@ jobs:
       - name: Build unsigned app (Release, no code signing)
         working-directory: ios
         run: |
-          set -eo pipefail
+          set -o pipefail
           WORKSPACE="$(ls -d *.xcworkspace | head -n1)"
           SCHEME="$(xcodebuild -list -json -workspace "$WORKSPACE" | jq -r '.workspace.schemes[] | select(test("Pods") | not)' | head -n1)"
           echo "Workspace: $WORKSPACE  Scheme: $SCHEME"
+          set +e
           xcodebuild \
             -workspace "$WORKSPACE" \
             -scheme "$SCHEME" \
@@ -61,7 +62,27 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            build
+            build 2>&1 | tee xcodebuild.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo ""
+            echo "==================== BUILD FAILED: extracted errors ===================="
+            grep -nE "error: |error generated|fatal error|The following build commands failed|Command .* failed|ld: |Undefined symbol|No such (file|module)|Multiple commands produce" xcodebuild.log \
+              | grep -viE "note: |Disabling previews|will be run during every build" \
+              | tail -n 100
+            echo "========================================================================"
+            echo "If nothing appears above, the last 60 raw lines were:"
+            tail -n 60 xcodebuild.log
+          fi
+          exit "$status"
+
+      - name: Upload build log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ios/xcodebuild.log
+          if-no-files-found: ignore
 
       - name: Package unsigned IPA
         working-directory: ios
